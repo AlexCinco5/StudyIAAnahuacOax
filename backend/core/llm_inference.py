@@ -1,40 +1,64 @@
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 import json
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from peft import PeftModel
 
-# Modelo base sugerido (puede cambiarse por la versión entrenada posteriormente)
-MODEL_ID = "mistralai/Mistral-7B-Instruct-v0.2"
+BASE_MODEL_ID = "Qwen/Qwen2.5-1.5B-Instruct"
+LORA_PATH = "./studyai_custom_lora"
 
-tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
-model = AutoModelForCausalLM.from_pretrained(
-    MODEL_ID,
-    torch_dtype=torch.float16,
-    device_map="auto" # Asigna automáticamente a la GPU
+print("⏳ Cargando modelo base y adaptadores LoRA...")
+
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.bfloat16,
 )
 
-pipe = pipeline("text-generation", model=model, tokenizer=tokenizer)
+tokenizer = AutoTokenizer.from_pretrained(LORA_PATH)
+base_model = AutoModelForCausalLM.from_pretrained(
+    BASE_MODEL_ID,
+    quantization_config=bnb_config,
+    device_map="auto"
+)
 
-def generate_study_material(chunk_text, target_lang="es"):
-    """Genera el JSON de estudio utilizando el modelo Transformer local."""
+# Aplicamos tu entrenamiento encima del modelo base
+model = PeftModel.from_pretrained(base_model, LORA_PATH)
+model.eval()
+print("✅ Modelo StudyAI cargado en GPU y listo para inferencia.")
+
+def generate_study_material(chunk_text: str):
+    """Genera el resumen y cuestionario usando el modelo entrenado."""
     
-    prompt = f"""[INST] Actúa como un profesor universitario. Analiza este texto y extrae conceptos clave generando un JSON estricto con arreglos de 'topics', 'flashcards' y 'quizzes'. El idioma debe ser {target_lang}.
-    Texto: {chunk_text}
-    Responde SOLO con JSON válido. [/INST]"""
-
-    outputs = pipe(
-        prompt, 
-        max_new_tokens=1500, 
-        temperature=0.3,
-        return_full_text=False
+    # Usamos exactamente el mismo formato ChatML con el que se entrenó
+    prompt = (
+        "<|im_start|>system\n"
+        "Eres StudyAI, un profesor universitario. Analiza el texto y responde ÚNICAMENTE con un JSON válido "
+        "que contenga 'summary' (lista de objetos con 'title' y 'body') y 'questions' (lista de objetos con "
+        "'question', 'options', 'answer' como índice numérico y 'explanation').<|im_end|>\n"
+        f"<|im_start|>user\n{chunk_text}<|im_end|>\n"
+        "<|im_start|>assistant\n"
     )
-    
-    generated_text = outputs[0]['generated_text']
-    
+
+    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+
+    with torch.no_grad():
+        outputs = model.generate(
+            **inputs,
+            max_new_tokens=1024,
+            temperature=0.2,
+            do_sample=True,
+            pad_token_id=tokenizer.eos_token_id
+        )
+
+    # Decodificamos solo los tokens nuevos generados por el asistente
+    generated_tokens = outputs[0][inputs["input_ids"].shape[1]:]
+    generated_text = tokenizer.decode(generated_tokens, skip_special_tokens=True)
+
     try:
-        # Extracción segura del JSON generada por la IA
-        start_idx = generated_text.find('{')
-        end_idx = generated_text.rfind('}') + 1
-        clean_text = generated_text[start_idx:end_idx]
-        return json.loads(clean_text)
-    except json.JSONDecodeError:
-        return {"topics": []}
+        start_idx = generated_text.find("{")
+        end_idx = generated_text.rfind("}") + 1
+        clean_json = generated_text[start_idx:end_idx]
+        return json.loads(clean_json)
+    except Exception as e:
+        print(f"⚠️ Error parseando JSON del modelo: {e}\nSalida cruda:\n{generated_text}")
+        return {"summary": [], "questions": []}

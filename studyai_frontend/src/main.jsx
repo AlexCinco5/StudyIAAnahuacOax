@@ -4,55 +4,9 @@ import {
   BrainCircuit, BookOpen, UploadCloud, FileText, Image as ImageIcon,
   File as FileIcon, Sparkles, ChevronDown, ChevronRight, CheckCircle2,
   CircleHelp, Clock3, ShieldCheck, ArrowRight, X, LoaderCircle,
-  ClipboardList, RotateCcw, GraduationCap, Menu, Download, ScanText
+  ClipboardList, RotateCcw, GraduationCap, Menu
 } from "lucide-react";
 import "./styles.css";
-
-const demoSummary = [
-  {
-    title: "¿Qué es el reconocimiento óptico de caracteres?",
-    body: "El OCR (Optical Character Recognition) es una tecnología que identifica caracteres dentro de una imagen y los convierte en texto digital que puede procesarse en una computadora."
-  },
-  {
-    title: "¿Cómo funciona un Transformer?",
-    body: "Los modelos Transformer procesan secuencias de texto mediante mecanismos de atención, lo que les permite relacionar palabras y contexto para tareas como resumir información y generar preguntas."
-  },
-  {
-    title: "¿Cómo se combinan en StudyAI?",
-    body: "El OCR se utiliza cuando la fuente es una imagen o un documento escaneado. Después, el texto extraído se prepara y se envía a un modelo Transformer para generar material de estudio."
-  }
-];
-
-const demoQuestions = [
-  {
-    question: "¿Cuál es la función principal de un sistema OCR?",
-    options: [
-      "Diseñar páginas web automáticamente",
-      "Convertir texto presente en imágenes a texto digital",
-      "Entrenar un modelo desde cero",
-      "Almacenar documentos en una base de datos"
-    ],
-    answer: 1,
-    explanation: "El OCR reconoce caracteres dentro de imágenes y los convierte en texto procesable."
-  },
-  {
-    question: "Los modelos Transformer pueden utilizarse para generar resúmenes de texto.",
-    options: ["Verdadero", "Falso"],
-    answer: 0,
-    explanation: "Los modelos Transformer preentrenados pueden utilizarse en tareas de generación y resumen de texto."
-  },
-  {
-    question: "¿En qué momento se utiliza OCR dentro del flujo de StudyAI?",
-    options: [
-      "Después de calificar el cuestionario",
-      "Únicamente al guardar resultados",
-      "Cuando el material de entrada contiene texto en imágenes",
-      "Para construir la interfaz de React"
-    ],
-    answer: 2,
-    explanation: "El OCR se utiliza cuando hace falta extraer texto de una imagen o documento escaneado."
-  }
-];
 
 function App() {
   const [activeTab, setActiveTab] = useState("summary");
@@ -61,6 +15,8 @@ function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generated, setGenerated] = useState(false);
+  const [summary, setSummary] = useState([]);
+  const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
@@ -68,9 +24,11 @@ function App() {
 
   const handleFile = (file) => {
     if (!file) return;
-    const allowed = ["application/pdf", "application/msword",
+    const allowed = [
+      "application/pdf", "application/msword",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "image/png", "image/jpeg", "image/webp", "text/plain"];
+      "image/png", "image/jpeg", "image/webp", "text/plain"
+    ];
     const extOk = /\.(pdf|doc|docx|png|jpe?g|webp|txt)$/i.test(file.name);
     if (!allowed.includes(file.type) && !extOk) {
       alert("Formato no compatible. Usa PDF, Word, TXT, JPG, PNG o WEBP.");
@@ -86,13 +44,12 @@ function App() {
     }
   };
 
-  // --- FUNCIÓN ACTUALIZADA PARA CONECTAR CON FASTAPI ---
   const generate = async () => {
     if (!inputText.trim() && !selectedFile) {
       alert("Escribe un texto o carga un archivo para comenzar.");
       return;
     }
-    
+
     setIsGenerating(true);
     setGenerated(false);
     setSubmitted(false);
@@ -117,29 +74,40 @@ function App() {
 
       const data = await response.json();
       console.log("Datos recibidos de la IA:", data);
-      
+
+      if (data.error) {
+        alert(data.error);
+        setIsGenerating(false);
+        return;
+      }
+
+      setSummary(Array.isArray(data.summary) ? data.summary : []);
+      setQuestions(Array.isArray(data.questions) ? data.questions : []);
       setIsGenerating(false);
       setGenerated(true);
       setActiveTab("summary");
-      
     } catch (error) {
       console.error(error);
-      alert("Hubo un problema al contactar con la IA local.");
+      alert("Hubo un problema al contactar con la IA local. Verifica que FastAPI esté corriendo.");
       setIsGenerating(false);
     }
   };
-  // -----------------------------------------------------
 
   const reset = () => {
     setSelectedFile(null);
     setInputText("");
+    setSummary([]);
+    setQuestions([]);
     setGenerated(false);
     setSubmitted(false);
     setAnswers({});
     if (fileInput.current) fileInput.current.value = "";
   };
 
-  const score = demoQuestions.reduce((sum, q, index) => sum + (answers[index] === q.answer ? 1 : 0), 0);
+  const score = questions.reduce(
+    (sum, q, index) => sum + (answers[index] === q.answer ? 1 : 0),
+    0
+  );
   const hasInput = Boolean(inputText.trim() || selectedFile);
 
   return (
@@ -152,7 +120,7 @@ function App() {
         </div>
 
         <div className="workspace-label">TU ESPACIO</div>
-        <button className="nav-item active" onClick={() => { setMobileMenu(false); }}>
+        <button className="nav-item active" onClick={() => { setActiveTab("summary"); setMobileMenu(false); }}>
           <div className="nav-icon"><BookOpen size={18}/></div><span>Mi material de estudio</span>
         </button>
         <button className="nav-item" onClick={() => { setActiveTab("quiz"); setMobileMenu(false); }}>
@@ -178,7 +146,7 @@ function App() {
         <header className="topbar">
           <button className="icon-button mobile-menu-button" onClick={() => setMobileMenu(true)} aria-label="Abrir menú"><Menu size={20}/></button>
           <div className="breadcrumb">Workspace <ChevronRight size={14}/> <strong>Mi material de estudio</strong></div>
-          <div className="topbar-right"><span className="status-dot"></span><span>Prototipo académico</span><div className="top-avatar">S</div></div>
+          <div className="topbar-right"><span className="status-dot"></span><span>IA Local Activa</span><div className="top-avatar">S</div></div>
         </header>
 
         <div className="content">
@@ -198,7 +166,7 @@ function App() {
           <section className="steps-strip">
             <div className="step-item"><div className="step-number">1</div><div><strong>Sube tu material</strong><span>PDF, Word, texto o imagen</span></div></div>
             <div className="step-connector"></div>
-            <div className="step-item"><div className="step-number">2</div><div><strong>Procesa con IA</strong><span>OCR + Transformers</span></div></div>
+            <div className="step-item"><div className="step-number">2</div><div><strong>Procesa con IA</strong><span>OCR + Qwen2.5 LoRA</span></div></div>
             <div className="step-connector"></div>
             <div className="step-item"><div className="step-number">3</div><div><strong>Practica</strong><span>Resumen y cuestionario</span></div></div>
           </section>
@@ -225,7 +193,7 @@ function App() {
                   <div className="selected-file">
                     <div className="file-type-icon">{selectedFile.type.startsWith("image/") ? <ImageIcon size={23}/> : <FileIcon size={23}/>}</div>
                     <div className="file-info"><strong>{selectedFile.name}</strong><span>{(selectedFile.size / 1024).toFixed(0)} KB · Archivo seleccionado</span></div>
-                    <button className="remove-file" onClick={(e) => { e.stopPropagation(); setSelectedFile(null); if(fileInput.current) fileInput.current.value = ""; }} aria-label="Quitar archivo"><X size={17}/></button>
+                    <button className="remove-file" onClick={(e) => { e.stopPropagation(); setSelectedFile(null); if (fileInput.current) fileInput.current.value = ""; }} aria-label="Quitar archivo"><X size={17}/></button>
                   </div>
                 ) : (
                   <>
@@ -242,7 +210,7 @@ function App() {
               <textarea id="study-text" value={inputText} onChange={(e) => { setInputText(e.target.value); setGenerated(false); }} placeholder="Pega aquí un fragmento de tus apuntes, clase o lectura..." rows={5}/>
               <div className="textarea-footer"><span>{inputText.length.toLocaleString("es-MX")} caracteres</span><span>Español <ChevronDown size={13}/></span></div>
 
-              <div className="privacy-note"><ShieldCheck size={16}/><span>Prototipo de demostración. Los archivos no se envían a un servidor en esta versión.</span></div>
+              <div className="privacy-note"><ShieldCheck size={16}/><span>Procesamiento 100% local en tu equipo mediante FastAPI y modelo LoRA.</span></div>
               <button className="primary-button" onClick={generate} disabled={isGenerating || !hasInput}>
                 {isGenerating ? <><LoaderCircle size={18} className="spin"/> Analizando con IA local...</> : <><Sparkles size={17}/> Generar material de estudio <ArrowRight size={17}/></>}
               </button>
@@ -270,49 +238,89 @@ function App() {
                 </div>
               ) : (
                 <>
-                  <div className="source-banner"><CheckCircle2 size={16}/><span>Entrada lista para demostración</span><span className="demo-tag">DATOS DE EJEMPLO</span></div>
+                  <div className="source-banner"><CheckCircle2 size={16}/><span>Material generado a partir de tu entrada</span><span className="demo-tag">MODELO LOCAL</span></div>
                   <div className="result-tabs">
                     <button className={activeTab === "summary" ? "selected" : ""} onClick={() => setActiveTab("summary")}><BookOpen size={16}/> Resumen</button>
-                    <button className={activeTab === "quiz" ? "selected" : ""} onClick={() => setActiveTab("quiz")}><ClipboardList size={16}/> Cuestionario <span className="tab-count">3</span></button>
+                    <button className={activeTab === "quiz" ? "selected" : ""} onClick={() => setActiveTab("quiz")}><ClipboardList size={16}/> Cuestionario <span className="tab-count">{questions.length}</span></button>
                   </div>
+
                   {activeTab === "summary" ? (
                     <div className="summary-content">
-                      <div className="summary-meta"><span><Sparkles size={14}/> Resumen organizado</span><span><Clock3 size={14}/> Lectura de 2 min</span></div>
+                      <div className="summary-meta"><span><Sparkles size={14}/> Resumen organizado</span><span><Clock3 size={14}/> Lectura rápida</span></div>
                       <h3>Conceptos clave</h3>
-                      {demoSummary.map((item, index) => (
-                        <article className="summary-section" key={item.title}>
-                          <div className="summary-index">0{index + 1}</div>
-                          <div><h4>{item.title}</h4><p>{item.body}</p></div>
-                        </article>
-                      ))}
-                      <div className="source-reminder"><ShieldCheck size={16}/><span>En la versión final, el contenido se generará a partir del documento que proporciones y deberá validarse con la fuente original.</span></div>
-                      <button className="secondary-button" onClick={() => setActiveTab("quiz")}>Practicar con preguntas <ArrowRight size={16}/></button>
+                      {summary.length === 0 ? (
+                        <p className="panel-description">El modelo no devolvió secciones de resumen para este texto. Intenta con un fragmento más amplio.</p>
+                      ) : (
+                        summary.map((item, index) => (
+                          <article className="summary-section" key={`${item.title}-${index}`}>
+                            <div className="summary-index">{String(index + 1).padStart(2, "0")}</div>
+                            <div><h4>{item.title}</h4><p>{item.body}</p></div>
+                          </article>
+                        ))
+                      )}
+                      <div className="source-reminder"><ShieldCheck size={16}/><span>Contenido generado por tu modelo entrenado. Valida los conceptos clave con tu fuente original.</span></div>
+                      {questions.length > 0 && (
+                        <button className="secondary-button" onClick={() => setActiveTab("quiz")}>Practicar con preguntas <ArrowRight size={16}/></button>
+                      )}
                     </div>
                   ) : (
                     <div className="quiz-content">
-                      <div className="quiz-topline"><div><span className="quiz-label">REPASO RÁPIDO</span><h3>Comprueba lo que sabes</h3></div><div className="question-total">03 <span>preguntas</span></div></div>
-                      {demoQuestions.map((q, index) => (
-                        <div className="question-card" key={q.question}>
-                          <div className="question-title"><span>{String(index + 1).padStart(2, "0")}</span><strong>{q.question}</strong></div>
-                          <div className="options-list">
-                            {q.options.map((option, optionIndex) => {
-                              const isChosen = answers[index] === optionIndex;
-                              const isCorrect = submitted && optionIndex === q.answer;
-                              const isWrong = submitted && isChosen && optionIndex !== q.answer;
-                              return <button key={option} className={`option ${isChosen ? "chosen" : ""} ${isCorrect ? "correct" : ""} ${isWrong ? "wrong" : ""}`} onClick={() => { if (!submitted) setAnswers({...answers, [index]: optionIndex}); }}>
-                                <span className="option-letter">{String.fromCharCode(65 + optionIndex)}</span><span>{option}</span>{isCorrect && <CheckCircle2 size={16}/>}
-                              </button>;
-                            })}
-                          </div>
-                          {submitted && <div className={`explanation ${answers[index] === q.answer ? "explanation-correct" : ""}`}><strong>{answers[index] === q.answer ? "¡Correcto!" : "Respuesta correcta: " + q.options[q.answer]}</strong><span>{q.explanation}</span></div>}
-                        </div>
-                      ))}
-                      {submitted ? (
-                        <div className="score-panel"><div className="score-icon"><GraduationCap size={24}/></div><div><span>Tu resultado</span><strong>{score} de {demoQuestions.length} correctas</strong></div><button className="secondary-button compact" onClick={() => { setAnswers({}); setSubmitted(false); }}>Volver a intentar</button></div>
+                      <div className="quiz-topline">
+                        <div><span className="quiz-label">REPASO RÁPIDO</span><h3>Comprueba lo que sabes</h3></div>
+                        <div className="question-total">{String(questions.length).padStart(2, "0")} <span>preguntas</span></div>
+                      </div>
+
+                      {questions.length === 0 ? (
+                        <p className="panel-description">No se generaron preguntas para este contenido.</p>
                       ) : (
-                        <button className="primary-button quiz-submit" onClick={() => setSubmitted(true)} disabled={Object.keys(answers).length !== demoQuestions.length}>Calificar respuestas <ArrowRight size={17}/></button>
+                        <>
+                          {questions.map((q, index) => (
+                            <div className="question-card" key={`${q.question}-${index}`}>
+                              <div className="question-title"><span>{String(index + 1).padStart(2, "0")}</span><strong>{q.question}</strong></div>
+                              <div className="options-list">
+                                {(q.options || []).map((option, optionIndex) => {
+                                  const isChosen = answers[index] === optionIndex;
+                                  const isCorrect = submitted && optionIndex === q.answer;
+                                  const isWrong = submitted && isChosen && optionIndex !== q.answer;
+                                  return (
+                                    <button
+                                      key={`${option}-${optionIndex}`}
+                                      className={`option ${isChosen ? "chosen" : ""} ${isCorrect ? "correct" : ""} ${isWrong ? "wrong" : ""}`}
+                                      onClick={() => { if (!submitted) setAnswers({ ...answers, [index]: optionIndex }); }}
+                                    >
+                                      <span className="option-letter">{String.fromCharCode(65 + optionIndex)}</span>
+                                      <span>{option}</span>
+                                      {isCorrect && <CheckCircle2 size={16}/>}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {submitted && (
+                                <div className={`explanation ${answers[index] === q.answer ? "explanation-correct" : ""}`}>
+                                  <strong>{answers[index] === q.answer ? "¡Correcto!" : "Respuesta correcta: " + (q.options?.[q.answer] ?? "")}</strong>
+                                  <span>{q.explanation}</span>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+
+                          {submitted ? (
+                            <div className="score-panel">
+                              <div className="score-icon"><GraduationCap size={24}/></div>
+                              <div><span>Tu resultado</span><strong>{score} de {questions.length} correctas</strong></div>
+                              <button className="secondary-button compact" onClick={() => { setAnswers({}); setSubmitted(false); }}>Volver a intentar</button>
+                            </div>
+                          ) : (
+                            <button
+                              className="primary-button quiz-submit"
+                              onClick={() => setSubmitted(true)}
+                              disabled={Object.keys(answers).length !== questions.length}
+                            >
+                              Calificar respuestas <ArrowRight size={17}/>
+                            </button>
+                          )}
+                        </>
                       )}
-                      <p className="quiz-disclaimer">Preguntas de ejemplo para mostrar la interacción del prototipo.</p>
                     </div>
                   )}
                 </>
@@ -322,7 +330,7 @@ function App() {
 
           <footer className="page-footer">
             <div className="footer-brand"><div className="footer-mark"><BrainCircuit size={16}/></div><strong>StudyAI</strong><span>·</span><span>Proyecto académico</span></div>
-            <div className="footer-note"><span className="footer-dot"></span> Interfaz demostrativa · OCR + Transformers por integrar</div>
+            <div className="footer-note"><span className="footer-dot"></span> Conectado a FastAPI · EasyOCR + Qwen2.5 LoRA</div>
           </footer>
         </div>
       </main>

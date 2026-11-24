@@ -1,0 +1,20 @@
+# Entornos virtuales y Python
+venv/
+entorno/
+__pycache__/
+*.pyc
+.env
+
+# Node / Frontend
+node_modules/
+dist/
+
+# Checkpoints y datasets pesados de IA
+backend/studyai_model_lora/
+backend/training/dataset/
+# Descomenta la siguiente línea si no quieres subir los pesos finales de LoRA:
+# backend/studyai_custom_lora/
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
